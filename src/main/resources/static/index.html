@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Notification Service</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #1e3c72;
+            font-size: 1.8rem;
+        }
+        .section {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            margin-top: 0;
+            font-size: 1.4rem;
+            color: #2c3e66;
+            border-left: 4px solid #4c9aff;
+            padding-left: 12px;
+        }
+        input, textarea, button {
+            font-size: 1rem;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            padding: 10px 12px;
+        }
+        input, textarea {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        button {
+            background: #4c9aff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2b7ae0;
+        }
+        .status {
+            margin-top: 16px;
+            background: #eef2fa;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .error {
+            color: #c00;
+            background: #ffe6e6;
+        }
+        .success {
+            color: #0a5e2e;
+            background: #e0f5e8;
+        }
+        .login-area {
+            background: #fff8e7;
+            border-left: 4px solid #f0b37b;
+        }
+        hr {
+            margin: 24px 0;
+        }
+        .token-info {
+            font-size: 0.75rem;
+            color: #5a6e8a;
+            word-break: break-all;
+            background: #eef2f9;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+        .flex-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .flex-row button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📬 Push Notification Service</h1>
+
+    <!-- Блок авторизации -->
+    <div class="section login-area" id="authSection">
+        <h2>🔐 Авторизация</h2>
+        <input type="text" id="username" placeholder="Имя пользователя (admin)" value="admin">
+        <input type="password" id="password" placeholder="Пароль (password)" value="password">
+        <button id="loginBtn">Получить JWT токен</button>
+        <div id="loginMessage" class="status"></div>
+        <div id="tokenDisplay" class="token-info" style="display: none;"></div>
+    </div>
+
+    <div id="appContent" style="display: none;">
+        <!-- Отправка уведомления -->
+        <div class="section">
+            <h2>📤 Отправить push-уведомление</h2>
+            <input type="text" id="userId" placeholder="ID пользователя (например, user123)" value="user123">
+            <textarea id="messageText" rows="3" placeholder="Текст уведомления">Привет из фронтенда!</textarea>
+            <button id="sendBtn">Отправить</button>
+            <div id="sendResult" class="status"></div>
+        </div>
+
+        <!-- Получение статуса -->
+        <div class="section">
+            <h2>🔍 Статус уведомления</h2>
+            <div class="flex-row">
+                <input type="text" id="notificationId" placeholder="ID уведомления (UUID)" style="flex:1">
+                <button id="getStatusBtn">Проверить статус</button>
+            </div>
+            <div id="statusResult" class="status"></div>
+        </div>
+
+        <button id="logoutBtn" style="background:#5a6e8a;">Выйти (удалить токен)</button>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/notifications';
+    const AUTH_URL = '/auth/login';
+
+    let currentToken = localStorage.getItem('jwt_token');
+
+    // DOM элементы
+    const authSection = document.getElementById('authSection');
+    const appContent = document.getElementById('appContent');
+    const loginMessageDiv = document.getElementById('loginMessage');
+    const tokenDisplaySpan = document.getElementById('tokenDisplay');
+
+    function updateUIBasedOnToken() {
+        if (currentToken) {
+            authSection.style.display = 'none';
+            appContent.style.display = 'block';
+            tokenDisplaySpan.style.display = 'block';
+            tokenDisplaySpan.innerText = `Токен (скрыт): ${currentToken.substring(0, 20)}...`;
+        } else {
+            authSection.style.display = 'block';
+            appContent.style.display = 'none';
+            tokenDisplaySpan.style.display = 'none';
+        }
+    }
+
+    // Логин
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        loginMessageDiv.innerHTML = '⏳ Запрос токена...';
+        loginMessageDiv.className = 'status';
+
+        try {
+            const response = await fetch(AUTH_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${errText}`);
+            }
+            const data = await response.json();
+            if (data.token) {
+                currentToken = data.token;
+                localStorage.setItem('jwt_token', currentToken);
+                loginMessageDiv.innerHTML = '✅ Токен успешно получен!';
+                loginMessageDiv.classList.add('success');
+                updateUIBasedOnToken();
+            } else {
+                throw new Error('Токен не найден в ответе');
+            }
+        } catch (err) {
+            loginMessageDiv.innerHTML = `❌ Ошибка: ${err.message}`;
+            loginMessageDiv.classList.add('error');
+        }
+    });
+
+    // Отправка уведомления
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+        const userId = document.getElementById('userId').value.trim();
+        const message = document.getElementById('messageText').value.trim();
+        const resultDiv = document.getElementById('sendResult');
+        if (!userId || !message) {
+            resultDiv.innerHTML = '❌ Заполните userId и сообщение';
+            resultDiv.classList.add('error');
+            return;
+        }
+        if (!currentToken) {
+            resultDiv.innerHTML = '❌ Нет токена. Авторизуйтесь сначала.';
+            resultDiv.classList.add('error');
+            return;
+        }
+        resultDiv.innerHTML = '⏳ Отправка...';
+        resultDiv.classList.remove('error', 'success');
+
+        try {
+            const response = await fetch(API_BASE, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: JSON.stringify({ userId, message })
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
+            const data = await response.json();
+            resultDiv.innerHTML = `✅ Уведомление создано!\nID: ${data.id}\nСтатус: ${data.status}\nВремя создания: ${data.createdAt}`;
+            resultDiv.classList.add('success');
+            document.getElementById('notificationId').value = data.id;
+        } catch (err) {
+            resultDiv.innerHTML = `❌ Ошибка отправки: ${err.message}`;
+            resultDiv.classList.add('error');
+        }
+    });
+
+    // Получение статуса
+    document.getElementById('getStatusBtn').addEventListener('click', async () => {
+        const id = document.getElementById('notificationId').value.trim();
+        const resultDiv = document.getElementById('statusResult');
+        if (!id) {
+            resultDiv.innerHTML = '❌ Введите ID уведомления';
+            resultDiv.classList.add('error');
+            return;
+        }
+        if (!currentToken) {
+            resultDiv.innerHTML = '❌ Нет токена. Авторизуйтесь.';
+            resultDiv.classList.add('error');
+            return;
+        }
+        resultDiv.innerHTML = '⏳ Загрузка...';
+        resultDiv.classList.remove('error', 'success');
+
+        try {
+            const response = await fetch(`${API_BASE}/${id}`, {
+                headers: { 'Authorization': `Bearer ${currentToken}` }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            resultDiv.innerHTML = `📄 Статус уведомления:\nID: ${data.id}\nСтатус: ${data.status}\nСообщение: ${data.message}\nДата создания: ${data.createdAt}\nДата обновления: ${data.updatedAt}\nОшибка: ${data.errorMessage || '—'}\nПопытки: ${data.retryCount || 0}`;
+            resultDiv.classList.add('success');
+        } catch (err) {
+            resultDiv.innerHTML = `❌ Не удалось получить статус: ${err.message}`;
+            resultDiv.classList.add('error');
+        }
+    });
+
+    // Выход (очистка токена)
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        currentToken = null;
+        localStorage.removeItem('jwt_token');
+        updateUIBasedOnToken();
+        // очистим поля результатов
+        document.getElementById('sendResult').innerHTML = '';
+        document.getElementById('statusResult').innerHTML = '';
+        document.getElementById('notificationId').value = '';
+    });
+
+    // При загрузке страницы проверим токен
+    updateUIBasedOnToken();
+</script>
+</body>
+</html>

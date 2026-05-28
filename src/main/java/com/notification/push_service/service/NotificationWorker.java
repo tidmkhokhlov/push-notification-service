@@ -68,6 +68,6 @@ public class NotificationWorker {
     // Заглушка
     private boolean sendPush(String userId, String message) {
         logger.info("Отправка push-уведомления пользователю {}: {}", userId, message);
-        return false;
+        return true;
     }
 }
