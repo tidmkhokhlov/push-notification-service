@@ -65,7 +65,7 @@ push-notification-service/
 │ │ ├── static/
 │ │ │ └── index.html # упрощённый фронтенд (тестирование API)
 │ │ └── application.properties # конфигурация БД, JWT, RabbitMQ, JPA
-│ └── test/... # тесты (опционально)
+│ └── test/... # тесты (в разработке)
 ├── .dockerignore # файлы, исключаемые из Docker-образа
 ├── .gitignore # файлы, исключаемые из Git
 ├── docker-compose.yml # оркестрация контейнеров (PostgreSQL, RabbitMQ, приложение)
