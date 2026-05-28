@@ -17,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - notification_network
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -32,6 +34,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - notification_network
+
+  app:
+    build: .
+    container_name: notification_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATASOURCE_URL: jdbc:postgresql://postgres:5432/notificationdb
+      DATASOURCE_USERNAME: postgres
+      DATASOURCE_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    networks:
+      - notification_network
+
+networks:
+  notification_network:
+    driver: bridge
 
 volumes:
   postgres_data:
